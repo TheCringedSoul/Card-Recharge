@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { db } from "./components/firebaseConfig";
-import { get } from "./components/firebaseConfig";
-import { ref } from "./components/firebaseConfig";
+import { db } from "../components/firebaseConfig";
+import { get } from "../components/firebaseConfig";
+import { ref } from "../components/firebaseConfig";
 export default function RechargePage() {
   const [rechargeNumber, setRechargeNumber] = useState("");
   const [step, setStep] = useState(1);
