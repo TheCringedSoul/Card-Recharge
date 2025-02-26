@@ -140,7 +140,7 @@ export default function RechargePage() {
           
           <input
             type="range"
-            min="50"
+            min="1"
             max="500"
             step="10"
             value={amount}
