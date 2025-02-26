@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { db } from "@/components/firebaseConfig";
+import { db } from "./components/firebaseConfig";
 import { ref, get, update } from "firebase/database";
 
 export default function RechargePage() {
