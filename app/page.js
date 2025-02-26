@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { db } from "./components/firebaseConfig";
-import { get } from "./components/firebaseConfig";
-import { ref } from "./components/firebaseConfig";
+import { db } from "@/components/firebaseConfig";
+import { ref, get, update } from "firebase/database";
+
 export default function RechargePage() {
   const [rechargeNumber, setRechargeNumber] = useState("");
   const [step, setStep] = useState(1);
@@ -11,6 +11,7 @@ export default function RechargePage() {
   const [userData, setUserData] = useState(null);
   const [amount, setAmount] = useState(50);
 
+  // 🔍 Check Recharge Number in Firebase
   const handleCheckRecharge = async () => {
     if (!rechargeNumber) {
       setMessage("Please enter a recharge number.");
@@ -18,7 +19,6 @@ export default function RechargePage() {
     }
 
     try {
-      // 🔍 Check if Recharge Number exists in Firebase
       const rechargeRef = ref(db, `/recharge/${rechargeNumber}`);
       const rechargeSnapshot = await get(rechargeRef);
 
@@ -28,8 +28,6 @@ export default function RechargePage() {
       }
 
       const cardID = rechargeSnapshot.val().cardID;
-
-      // 🔍 Fetch User Data from `addedCards`
       const cardRef = ref(db, `/addedCards/${cardID}`);
       const cardSnapshot = await get(cardRef);
 
@@ -38,18 +36,36 @@ export default function RechargePage() {
         return;
       }
 
-      setUserData(cardSnapshot.val());
-      setStep(2); // Move to step 2
+      setUserData({ ...cardSnapshot.val(), cardID });
+      setStep(2); // Move to next step
     } catch (error) {
       console.error("Error fetching data:", error);
       setMessage("Something went wrong. Please try again.");
     }
   };
 
+  // 🔄 Redirect to UPI Payment
   const handlePaymentRedirect = () => {
     const upiID = "9643959117@pthdfc"; // Replace with your actual UPI ID
-    const payUrl = `upi://pay?pa=${upiID}&pn=Recharge&mc=&tid=&tr=&tn=Recharge Payment&am=${amount}&cu=INR`;
-    window.location.href = payUrl; // Redirect to UPI payment
+    const payUrl = `upi://pay?pa=${upiID}&pn=Recharge&am=${amount}&cu=INR`;
+
+    // Open UPI app
+    window.open(payUrl, "_blank");
+  };
+
+  // ✅ Update Firebase After Payment
+  const handlePaymentSuccess = async () => {
+    try {
+      const userRef = ref(db, `/addedCards/${userData.cardID}`);
+      await update(userRef, { cashAmount: userData.cashAmount + Number(amount) });
+
+      setMessage(`Recharge Successful! New Balance: ₹${userData.cashAmount + Number(amount)}`);
+      setStep(1);
+      setRechargeNumber("");
+    } catch (error) {
+      console.error("Error updating balance:", error);
+      setMessage("Failed to update balance. Please contact support.");
+    }
   };
 
   return (
@@ -138,6 +154,13 @@ export default function RechargePage() {
             className="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-md text-lg"
           >
             Proceed to Pay ₹{amount}
+          </button>
+
+          <button
+            onClick={handlePaymentSuccess}
+            className="mt-2 bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-md text-lg"
+          >
+            Payment Successful (Simulated)
           </button>
         </div>
       )}
