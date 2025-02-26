@@ -47,7 +47,7 @@ export default function RechargePage() {
   };
 
   const handlePaymentRedirect = () => {
-    const upiID = "upi-id@bank"; // Replace with your actual UPI ID
+    const upiID = "9643959117@pthdfc"; // Replace with your actual UPI ID
     const payUrl = `upi://pay?pa=${upiID}&pn=Recharge&mc=&tid=&tr=&tn=Recharge Payment&am=${amount}&cu=INR`;
     window.location.href = payUrl; // Redirect to UPI payment
   };
