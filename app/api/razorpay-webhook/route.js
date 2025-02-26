@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
-import { db, ref, set } from "./components/firebaseConfig";
+import { db, set, ref } from "@/app/components/firebaseConfig";
 
 export async function POST(req) {
   const bodyText = await req.text();
