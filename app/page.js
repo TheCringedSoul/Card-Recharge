@@ -1,170 +1,211 @@
 "use client";
 
 import { useState } from "react";
-import { db, ref, get } from "./components/firebaseConfig";
+import { ref, onValue, set } from "firebase/database";
+import { db } from "./components/firebaseConfig";
+import { authenticator } from "otplib";
 
-export default function RechargePage() {
-  const [enrollmentNumber, setEnrollmentNumber] = useState("");
+const BlockPage = () => {
+  const [enroll, setEnroll] = useState("");
+  const [nameInput, setNameInput] = useState("");
+  const [cardInfo, setCardInfo] = useState(null);
   const [step, setStep] = useState(1);
-  const [message, setMessage] = useState("");
-  const [userData, setUserData] = useState(null);
-  const [amount, setAmount] = useState(50);
+  const [amount, setAmount] = useState(0);
+  const [otpCode, setOtpCode] = useState("");
+  const [error, setError] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
 
-  const handleCheckEnrollment = async () => {
-    if (!enrollmentNumber) {
-      setMessage("Please enter your enrollment number.");
-      return;
-    }
-
-    try {
-      const enrollmentRef = ref(db, `/enrollments/${enrollmentNumber}`);
-      const enrollmentSnap = await get(enrollmentRef);
-
-      if (!enrollmentSnap.exists()) {
-        setMessage("Invalid Enrollment Number.");
-        return;
-      }
-
-      const { cardID } = enrollmentSnap.val();
-
-      const cardRef = ref(db, `/addedCards/${cardID}`);
-      const cardSnap = await get(cardRef);
-
-      if (!cardSnap.exists()) {
-        setMessage("Card not found for this enrollment number.");
-        return;
-      }
-
-      const user = cardSnap.val();
-
-      if (user.status && user.status.toLowerCase() === "blocked") {
-        setMessage("This account is currently blocked and cannot be recharged.");
-        return;
-      }
-
-      setUserData({ ...user, enrollmentNumber }); // Attach enrollment for confirmation
-      setStep(2);
-      setMessage("");
-    } catch (error) {
-      console.error("Error:", error);
-      setMessage("Something went wrong. Please try again.");
-    }
+  const resetAll = () => {
+    setStep(1);
+    setEnroll("");
+    setNameInput("");
+    setCardInfo(null);
+    setAmount(0);
+    setOtpCode("");
+    setError("");
+    setSuccessMsg("");
   };
 
-  const handlePaymentRedirect = () => {
-    const upiID = "upi-id@bank";
-    const payUrl = `upi://pay?pa=${upiID}&pn=Recharge&mc=&tid=&tr=&tn=Recharge Payment&am=${amount}&cu=INR`;
-    window.location.href = payUrl;
+  const handleFetch = () => {
+    setError("");
+    if (!enroll) return setError("Please enter enrollment number");
+    onValue(
+      ref(db, `/enrollments/${enroll}`),
+      (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          setCardInfo({ ...data });
+          setStep(2);
+        } else {
+          setError("Enrollment not found");
+        }
+      },
+      { onlyOnce: true }
+    );
   };
 
-  const maxRecharge = userData ? Math.max(0, 500 - userData.cashAmount) : 500;
+  const confirmName = () => {
+    setError("");
+    if (nameInput.trim().toLowerCase() !== cardInfo.name.trim().toLowerCase()) {
+      return setError("Name does not match");
+    }
+    onValue(
+      ref(db, `/addedCards/${cardInfo.cardID}`),
+      (snapshot) => {
+        const full = snapshot.val();
+        if (full) {
+          setCardInfo((prev) => ({ ...prev, ...full }));
+          setStep(3);
+        } else {
+          setError("Card data not found");
+        }
+      },
+      { onlyOnce: true }
+    );
+  };
+
+  const handleRecharge = () => {
+    setError("");
+    const rechargeAmount = Number(amount);
+    const currentAmount = cardInfo.cashAmount || 0;
+    const newAmount = currentAmount + rechargeAmount;
+
+    if (newAmount > 500) {
+      return setError(`Cannot exceed ₹500. You can only add ₹${500 - currentAmount}`);
+    }
+
+    // Update balance in Firebase
+    set(ref(db, `/addedCards/${cardInfo.cardID}/cashAmount`), newAmount);
+    setSuccessMsg(`Recharged successfully! New balance: ₹${newAmount}`);
+
+    // Redirect to UPI link with pre-filled data
+    const upiURL = `upi://pay?pa=merchant@upi&pn=SmartCard&am=${rechargeAmount}&cu=INR&tn=Recharge for ${enroll}`;
+    window.location.href = upiURL;
+  };
+
+  const handleBlock = () => {
+    setError("");
+    onValue(
+      ref(db, `/totpSecrets/${cardInfo.cardID}/secret`),
+      (snapshot) => {
+        const secret = snapshot.val();
+        if (!secret) return setError("Authenticator setup not found for this card");
+        const isValid = authenticator.check(otpCode, secret);
+        if (!isValid) return setError("Invalid OTP code");
+
+        set(ref(db, `/addedCards/${cardInfo.cardID}/status`), "Blocked");
+        setSuccessMsg("Card successfully blocked!");
+      },
+      { onlyOnce: true }
+    );
+  };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-6">
-      <h1 className="text-4xl font-bold mb-6">Recharge Portal</h1>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900 text-white p-4">
+      <div className="w-full max-w-xl bg-slate-950 rounded-2xl shadow-2xl p-8 space-y-6 border border-slate-700">
+        <h1 className="text-3xl font-bold text-center mb-4 text-white">🛡️ Card Control Panel</h1>
 
-      {step === 1 && (
-        <div className="flex flex-col items-center">
-          <input
-            type="text"
-            placeholder="Enter Enrollment Number"
-            value={enrollmentNumber}
-            onChange={(e) => setEnrollmentNumber(e.target.value)}
-            className="p-3 border border-gray-400 rounded-md mb-3 text-black w-80 text-center"
-          />
-          <button
-            onClick={handleCheckEnrollment}
-            className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-md text-lg"
-          >
-            Check
-          </button>
-          {message && <p className="mt-3 text-red-400">{message}</p>}
-        </div>
-      )}
+        {error && (
+          <div className="bg-red-500 text-white text-sm px-4 py-2 rounded-md">{error}</div>
+        )}
+        {successMsg && (
+          <div className="bg-green-600 text-white text-sm px-4 py-2 rounded-md">{successMsg}</div>
+        )}
 
-      {step === 2 && userData && (
-        <div className="flex flex-col items-center">
-          <h2 className="text-2xl mb-4">
-            Is your enrollment number <span className="font-bold">{userData.enrollmentNumber}</span>?
-          </h2>
-          <div className="flex gap-4">
+        {step === 1 && (
+          <div className="space-y-4">
+            <label className="block text-sm font-medium">Enrollment Number</label>
+            <input
+              type="text"
+              value={enroll}
+              onChange={(e) => setEnroll(e.target.value)}
+              placeholder="e.g., 12345678"
+              className="w-full p-3 rounded-md bg-slate-800 text-white border border-slate-600 focus:outline-none focus:ring focus:ring-blue-500"
+            />
             <button
-              onClick={() => setStep(3)}
-              className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-md text-lg"
+              onClick={handleFetch}
+              className="w-full bg-blue-600 hover:bg-blue-700 transition font-semibold py-3 rounded-md"
             >
-              Yes
-            </button>
-            <button
-              onClick={() => {
-                setEnrollmentNumber("");
-                setUserData(null);
-                setStep(1);
-              }}
-              className="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-md text-lg"
-            >
-              No
+              Continue
             </button>
           </div>
-        </div>
-      )}
+        )}
 
-      {step === 3 && userData && (
-        <div className="flex flex-col items-center">
-          <h2 className="text-2xl mb-4">
-            Is your name <span className="font-bold">{userData.name}</span>?
-          </h2>
-          <div className="flex gap-4">
+        {step === 2 && (
+          <div className="space-y-4">
+            <label className="block text-sm font-medium">Confirm Your Name</label>
+            <input
+              type="text"
+              value={nameInput}
+              onChange={(e) => setNameInput(e.target.value.toLowerCase())}
+              placeholder="Enter your full name"
+              className="w-full p-3 rounded-md bg-slate-800 text-white border border-slate-600 focus:outline-none focus:ring focus:ring-blue-500"
+            />
             <button
-              onClick={() => setStep(4)}
-              className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-md text-lg"
+              onClick={confirmName}
+              className="w-full bg-blue-600 hover:bg-blue-700 transition font-semibold py-3 rounded-md"
             >
-              Yes
-            </button>
-            <button
-              onClick={() => {
-                setEnrollmentNumber("");
-                setUserData(null);
-                setStep(1);
-              }}
-              className="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-md text-lg"
-            >
-              No
+              Confirm Name
             </button>
           </div>
-        </div>
-      )}
+        )}
 
-      {step === 4 && userData && (
-        <div className="flex flex-col items-center">
-          <h2 className="text-2xl mb-2">
-            Current Balance: ₹{userData.cashAmount}
-          </h2>
-          <h3 className="text-lg mb-4">Select Amount to Recharge (Max ₹{maxRecharge}):</h3>
+        {step === 3 && cardInfo && (
+          <div className="space-y-6">
+            <div className="text-center space-y-1">
+              <h2 className="text-2xl font-semibold">Welcome, {cardInfo.name}</h2>
+              <p className="text-sm text-slate-300">Card ID: {cardInfo.cardID}</p>
+              <p className="text-sm text-slate-300">Status: {cardInfo.status}</p>
+              <p className="text-md font-medium text-green-400">Balance: ₹{cardInfo.cashAmount}</p>
+            </div>
 
-          <input
-            type="range"
-            min="10"
-            max={maxRecharge}
-            step="10"
-            value={amount}
-            onChange={(e) => setAmount(Number(e.target.value))}
-            className="w-80 mb-4"
-            disabled={maxRecharge === 0}
-          />
-          <p className="text-lg font-bold">₹{amount}</p>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="bg-slate-800 rounded-xl p-4 border border-slate-700 space-y-3">
+                <h3 className="text-lg font-semibold">💸 Recharge Card</h3>
+                <input
+                  type="number"
+                  value={amount}
+                  onChange={(e) => setAmount(Number(e.target.value))}
+                  placeholder={`Max ₹${500 - (cardInfo.cashAmount || 0)}`}
+                  className="w-full p-2 rounded-md bg-slate-700 text-white border border-slate-600"
+                />
+                <button
+                  onClick={handleRecharge}
+                  className="w-full bg-green-600 hover:bg-green-700 transition font-semibold py-2 rounded-md"
+                >
+                  Proceed to Recharge
+                </button>
+              </div>
 
-          {maxRecharge > 0 ? (
+              <div className="bg-slate-800 rounded-xl p-4 border border-slate-700 space-y-3">
+                <h3 className="text-lg font-semibold">🚫 Block Card</h3>
+                <input
+                  type="text"
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value)}
+                  placeholder="Enter OTP"
+                  className="w-full p-2 rounded-md bg-slate-700 text-white border border-slate-600"
+                />
+                <button
+                  onClick={handleBlock}
+                  className="w-full bg-red-600 hover:bg-red-700 transition font-semibold py-2 rounded-md"
+                >
+                  Block Card
+                </button>
+              </div>
+            </div>
+
             <button
-              onClick={handlePaymentRedirect}
-              className="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-md text-lg"
+              onClick={resetAll}
+              className="w-full bg-slate-600 hover:bg-slate-700 mt-4 py-2 rounded-md"
             >
-              Proceed to Pay ₹{amount}
+              🔄 Start Over
             </button>
-          ) : (
-            <p className="mt-4 text-yellow-400">You have reached the ₹500 limit.</p>
-          )}
-        </div>
-      )}
+          </div>
+        )}
+      </div>
     </div>
   );
-}
+};
+
+export default BlockPage;
