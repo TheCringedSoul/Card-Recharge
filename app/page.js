@@ -92,7 +92,7 @@ const BlockPage = () => {
     setButtonsDisabled(true);
 
     // Redirect to UPI
-    const upiLink = `upi://pay?pa=9564898754@ptaxis&pn=SmartCard&am=${rechargeAmount}&cu=INR&tn=${enroll}`;
+    const upiLink = `upi://pay?pa=9643959117@pthdfc&pn=SmartCard&am=${rechargeAmount}&cu=INR&tn=${enroll}`;
     setTimeout(() => {
       window.location.href = upiLink;
     }, 1000);
