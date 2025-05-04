@@ -205,12 +205,13 @@ const BlockPage = () => {
                 <h3 className="text-lg font-semibold">💸 Recharge Card</h3>
                 <input
                   type="range"
-                  min="1"
+                  min="0"
                   max={maxRecharge}
                   value={amount}
                   onChange={(e) => setAmount(Number(e.target.value))}
                   className="w-full"
                   disabled={buttonsDisabled || cardInfo.status === "Blocked"}
+                  step={5}
                 />
                 <div className="text-sm text-gray-300">
                   Amount: <span className="font-semibold">₹{amount}</span>
