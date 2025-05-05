@@ -100,7 +100,7 @@ const BlockPage = () => {
     // Logout after 10 seconds
     setTimeout(() => {
       resetAll();
-      router.refresh(); // Or router.push("/login") if there's a login route
+      router.refresh(); 
     }, 10000);
   };
 
@@ -129,7 +129,7 @@ const BlockPage = () => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-zinc-900 to-gray-950 text-white p-4">
       <div className="w-full max-w-xl bg-zinc-800 rounded-2xl shadow-2xl p-8 space-y-6 border border-zinc-600">
         <h1 className="text-3xl font-bold text-center text-white">
-          💳 Card Recharge & Control
+          💳 Jaypee Card Recharge & Control
         </h1>
 
         {error && (
